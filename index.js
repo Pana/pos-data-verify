@@ -35,11 +35,14 @@ const conflux = new Conflux({
 });
 
 const invalidPosEpoch = 8751;
-const startPosEpoch = 7; // 从第 7 个 pos epoch 开始有奖励发放
+const START_POS_EPOCH = 7; // 从第 7 个 pos epoch 开始有奖励发放
 
 async function main() {
     const posStatus = await conflux.pos.getStatus();
     const latestPosEpoch = posStatus.epoch;
+
+    const epochCmdLineArg = process.argv[2];
+    let startPosEpoch = epochCmdLineArg ? parseInt(epochCmdLineArg) : START_POS_EPOCH;
     
     for (let epoch = startPosEpoch; epoch <= latestPosEpoch; epoch++) {
         try {
@@ -54,6 +57,7 @@ async function main() {
             let powEpochNumber = powEpoch.epochNumber;
 
             let {addTransfers, subTransfers} = await getEpochInternalTransfers(powEpochNumber);
+            console.log(addTransfers, subTransfers);
 
             let recordValid = true;
             for(let rewardRecord of reward.accountRewards) {
@@ -173,6 +177,20 @@ async function getEpochInternalTransfers(epochNumber) {
         }
 
         // ignore set_auth, selfdestruct
+    }
+
+    for (let key in addTransfers) {
+        addTransfers[format.address(key)] = addTransfers[key];
+        if (key !== format.address(key)) {
+            delete addTransfers[key];
+        }
+    }
+
+    for (let key in subTransfers) {
+        subTransfers[format.address(key)] = subTransfers[key];
+        if (key !== format.address(key)) {
+            delete subTransfers[key];
+        }
     }
 
     return {

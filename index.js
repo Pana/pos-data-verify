@@ -41,7 +41,7 @@ async function main() {
     const posStatus = await conflux.pos.getStatus();
     const latestPosEpoch = posStatus.epoch;
     
-    for (let epoch = invalidPosEpoch; epoch <= latestPosEpoch; epoch++) {
+    for (let epoch = startPosEpoch; epoch <= latestPosEpoch; epoch++) {
         try {
             let reward = await conflux.pos.getRewardsByEpoch(epoch);
             if (reward.accountRewards.length === 0) {

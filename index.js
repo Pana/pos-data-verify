@@ -22,6 +22,7 @@
 */
 
 const { Conflux, format } = require('js-conflux-sdk');
+const fs = require('fs');
 
 const url = "http://8.217.41.74:12537";
 // const url = "http://101.201.82.52:12537";
@@ -35,52 +36,6 @@ const conflux = new Conflux({
 
 const invalidPosEpoch = 8751;
 const startPosEpoch = 7; // 从第 7 个 pos epoch 开始有奖励发放
-
-// 跳过 epoch 有 trace 数据的情况
-async function main1() {
-    const posStatus = await conflux.pos.getStatus();
-    const latestPosEpoch = posStatus.epoch;
-    
-    for (let epoch = invalidPosEpoch; epoch <= latestPosEpoch; epoch++) {
-        let reward = await conflux.pos.getRewardsByEpoch(epoch);
-        if (reward.accountRewards.length === 0) {
-            console.log(`epoch ${epoch} has no reward records, skip`);
-            continue;
-        }
-
-        // powEpochHash
-        let powEpoch = await conflux.cfx.getBlockByHash(reward.powEpochHash, false);
-        let powEpochNumber = powEpoch.epochNumber;
-
-        const epochTraces = await conflux.trace.epoch(powEpochNumber);
-
-        if (epochTraces.cfxTraces.length > 0) {
-            console.log(`epoch ${epoch} pow epoch ${powEpochNumber} has traces, skip`);
-            continue;
-        }
-
-        let recordValid = true;
-        for(let rewardRecord of reward.accountRewards) {
-            let balanceBefore = await conflux.cfx.getBalance(rewardRecord.powAddress, powEpochNumber - 1);
-            let balanceAfter = await conflux.cfx.getBalance(rewardRecord.powAddress, powEpochNumber);
-
-            if (balanceAfter - balanceBefore !== rewardRecord.reward) {
-                console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - balanceBefore}`);
-                recordValid = false;
-            }
-        }
-
-        if (recordValid) {
-            console.log(`epoch ${epoch} reward records are all valid ✅✅✅✅✅✅✅`);
-        } else {
-            console.log(`epoch ${epoch} reward records are invalid ❌❌❌❌❌❌❌`);
-        }
-
-        if (epoch >= invalidPosEpoch + 2)
-            break;
-
-    }
-}
 
 async function main() {
     const posStatus = await conflux.pos.getStatus();
@@ -119,7 +74,9 @@ async function main() {
             if (recordValid) {
                 console.log(`PoS epoch ${epoch} reward records are all valid ✅`);
             } else {
-                console.log(`PoS epoch ${epoch} reward records are invalid ❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌`);
+                let errMsg = `PoS epoch ${epoch} reward records are invalid ❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌`;
+                console.log(errMsg);
+                fs.appendFileSync('invalid_pos_rewards.log', errMsg + '\n');
             }
 
         } catch (err) {
@@ -228,3 +185,50 @@ main().catch((err) => {
     console.error(err);
     process.exit(1);
 });
+
+
+// 跳过 epoch 有 trace 数据的情况
+async function main1() {
+    const posStatus = await conflux.pos.getStatus();
+    const latestPosEpoch = posStatus.epoch;
+    
+    for (let epoch = startPosEpoch; epoch <= latestPosEpoch; epoch++) {
+        let reward = await conflux.pos.getRewardsByEpoch(epoch);
+        if (reward.accountRewards.length === 0) {
+            console.log(`epoch ${epoch} has no reward records, skip`);
+            continue;
+        }
+
+        // powEpochHash
+        let powEpoch = await conflux.cfx.getBlockByHash(reward.powEpochHash, false);
+        let powEpochNumber = powEpoch.epochNumber;
+
+        const epochTraces = await conflux.trace.epoch(powEpochNumber);
+
+        if (epochTraces.cfxTraces.length > 0) {
+            console.log(`epoch ${epoch} pow epoch ${powEpochNumber} has traces, skip`);
+            continue;
+        }
+
+        let recordValid = true;
+        for(let rewardRecord of reward.accountRewards) {
+            let balanceBefore = await conflux.cfx.getBalance(rewardRecord.powAddress, powEpochNumber - 1);
+            let balanceAfter = await conflux.cfx.getBalance(rewardRecord.powAddress, powEpochNumber);
+
+            if (balanceAfter - balanceBefore !== rewardRecord.reward) {
+                console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - balanceBefore}`);
+                recordValid = false;
+            }
+        }
+
+        if (recordValid) {
+            console.log(`epoch ${epoch} reward records are all valid ✅✅✅✅✅✅✅`);
+        } else {
+            console.log(`epoch ${epoch} reward records are invalid ❌❌❌❌❌❌❌`);
+        }
+
+        if (epoch >= invalidPosEpoch + 2)
+            break;
+
+    }
+}

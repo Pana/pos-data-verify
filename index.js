@@ -85,7 +85,7 @@ async function main() {
     const posStatus = await conflux.pos.getStatus();
     const latestPosEpoch = posStatus.epoch;
     
-    for (let epoch = 109; epoch <= latestPosEpoch; epoch++) {
+    for (let epoch = invalidPosEpoch; epoch <= latestPosEpoch; epoch++) {
         let reward = await conflux.pos.getRewardsByEpoch(epoch);
         if (reward.accountRewards.length === 0) {
             console.log(`epoch ${epoch} has no reward records, skip`);
@@ -119,9 +119,6 @@ async function main() {
         } else {
             console.log(`PoS epoch ${epoch} reward records are invalid ❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌`);
         }
-
-        if (epoch >= invalidPosEpoch + 2)
-            break;
 
     }
 }

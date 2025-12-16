@@ -57,7 +57,8 @@ async function main() {
             let powEpochNumber = powEpoch.epochNumber;
 
             let {addTransfers, subTransfers} = await getEpochInternalTransfers(powEpochNumber);
-            console.log(addTransfers, subTransfers);
+            // console.log('addTransfers:', addTransfers);
+            // console.log('subTransfers:', subTransfers);
 
             let recordValid = true;
             for(let rewardRecord of reward.accountRewards) {
@@ -70,7 +71,9 @@ async function main() {
                 let internalSub = subTransfers[powAddress] || 0n;
 
                 if (balanceBefore + internalAdd - internalSub + rewardRecord.reward !== balanceAfter) {
-                    console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - balanceBefore}`);
+                    console.error(`balance before: ${balanceBefore}, balance after: ${balanceAfter}`);
+                    console.error(`internal transfers add: ${internalAdd}, sub: ${internalSub}`);
+                    console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - (balanceBefore + internalAdd - internalSub)}`);
                     recordValid = false;
                 }
             }
@@ -97,7 +100,7 @@ async function main() {
 async function getEpochInternalTransfers(epochNumber) {
     const epochTraces = await conflux.trace.epoch(epochNumber);
     let traceStack = [];
-    // console.log(`epoch ${epochNumber} has ${epochTraces.cfxTraces.length} traces`);
+    console.log(`epoch ${epochNumber} has ${epochTraces.cfxTraces.length} traces`);
 
     let addTransfers = {};
     let subTransfers = {};

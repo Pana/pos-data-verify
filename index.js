@@ -45,50 +45,61 @@ async function main() {
     let startPosEpoch = epochCmdLineArg ? parseInt(epochCmdLineArg) : START_POS_EPOCH;
     
     for (let epoch = startPosEpoch; epoch <= latestPosEpoch; epoch++) {
-        try {
-            let reward = await conflux.pos.getRewardsByEpoch(epoch);
-            if (reward.accountRewards.length === 0) {
-                console.log(`epoch ${epoch} has no reward records, skip`);
-                continue;
-            }
+        await checkPosRewardRecord(epoch);
+    }
 
-            // powEpochHash
-            let powEpoch = await conflux.cfx.getBlockByHash(reward.powEpochHash, false);
-            let powEpochNumber = powEpoch.epochNumber;
+    // let items = [
+    //     37890,
+    // ];
+    // for (let epoch of items) {
+    //     await checkPosRewardRecord(epoch);
+    // }
+}
 
-            let {addTransfers, subTransfers} = await getEpochInternalTransfers(powEpochNumber);
-            // console.log('addTransfers:', addTransfers);
-            // console.log('subTransfers:', subTransfers);
-
-            let recordValid = true;
-            for(let rewardRecord of reward.accountRewards) {
-                let powAddress = format.address(rewardRecord.powAddress);
-                
-                let balanceBefore = await conflux.cfx.getBalance(powAddress, powEpochNumber - 1);
-                let balanceAfter = await conflux.cfx.getBalance(powAddress, powEpochNumber);
-
-                let internalAdd = addTransfers[powAddress] || 0n;
-                let internalSub = subTransfers[powAddress] || 0n;
-
-                if (balanceBefore + internalAdd - internalSub + rewardRecord.reward !== balanceAfter) {
-                    console.error(`balance before: ${balanceBefore}, balance after: ${balanceAfter}`);
-                    console.error(`internal transfers add: ${internalAdd}, sub: ${internalSub}`);
-                    console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - (balanceBefore + internalAdd - internalSub)}`);
-                    recordValid = false;
-                }
-            }
-
-            if (recordValid) {
-                console.log(`PoS epoch ${epoch} reward records are all valid ✅`);
-            } else {
-                let errMsg = `PoS epoch ${epoch} reward records are invalid ❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌`;
-                console.log(errMsg);
-                fs.appendFileSync('invalid_pos_rewards.log', errMsg + '\n');
-            }
-
-        } catch (err) {
-            console.error(`epoch ${epoch} checking failed: ${err}`);
+async function checkPosRewardRecord(epoch) {
+    try {
+        let reward = await conflux.pos.getRewardsByEpoch(epoch);
+        if (reward.accountRewards.length === 0) {
+            console.log(`epoch ${epoch} has no reward records, skip`);
+            return;
         }
+
+        // powEpochHash
+        let powEpoch = await conflux.cfx.getBlockByHash(reward.powEpochHash, false);
+        let powEpochNumber = powEpoch.epochNumber;
+
+        let {addTransfers, subTransfers} = await getEpochInternalTransfers(powEpochNumber);
+        // console.log('addTransfers:', addTransfers);
+        // console.log('subTransfers:', subTransfers);
+
+        let recordValid = true;
+        for(let rewardRecord of reward.accountRewards) {
+            let powAddress = format.address(rewardRecord.powAddress);
+            
+            let balanceBefore = await conflux.cfx.getBalance(powAddress, powEpochNumber - 1);
+            let balanceAfter = await conflux.cfx.getBalance(powAddress, powEpochNumber);
+
+            let internalAdd = addTransfers[powAddress] || 0n;
+            let internalSub = subTransfers[powAddress] || 0n;
+
+            if (balanceBefore + internalAdd - internalSub + rewardRecord.reward !== balanceAfter) {
+                console.error(`balance before: ${balanceBefore}, balance after: ${balanceAfter}`);
+                console.error(`internal transfers add: ${internalAdd}, sub: ${internalSub}`);
+                console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - (balanceBefore + internalAdd - internalSub)}`);
+                recordValid = false;
+            }
+        }
+
+        if (recordValid) {
+            console.log(`PoS epoch ${epoch} reward records are all valid ✅`);
+        } else {
+            let errMsg = `PoS epoch ${epoch} reward records are invalid ❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌`;
+            console.log(errMsg);
+            fs.appendFileSync('invalid_pos_rewards.log', errMsg + '\n');
+        }
+
+    } catch (err) {
+        console.error(`epoch ${epoch} checking failed: ${err}`);
     }
 }
 
@@ -137,7 +148,8 @@ async function getEpochInternalTransfers(epochNumber) {
             let lastTrace = traceStack.pop();
 
             // case to skip, because these traces are not affecting account balance
-            if (!lastTrace.valid || lastTrace.action.callType === 'staticcall' || lastTrace.action.space !== 'native') {
+            let not_actual_transfer_trace = lastTrace.action.callType === 'staticcall' || lastTrace.action.callType === 'delegatecall';
+            if (!lastTrace.valid || not_actual_transfer_trace || lastTrace.action.space !== 'native') {
                 continue;
             }
             if (trace.action.outcome !== 'success') {

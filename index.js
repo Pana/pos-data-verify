@@ -40,20 +40,29 @@ const START_POS_EPOCH = 7; // 从第 7 个 pos epoch 开始有奖励发放
 async function main() {
     const posStatus = await conflux.pos.getStatus();
     const latestPosEpoch = posStatus.epoch;
-
     const epochCmdLineArg = process.argv[2];
     let startPosEpoch = epochCmdLineArg ? parseInt(epochCmdLineArg) : START_POS_EPOCH;
     
     for (let epoch = startPosEpoch; epoch <= latestPosEpoch; epoch++) {
         await checkPosRewardRecord(epoch);
     }
+}
 
-    // let items = [
-    //     37890,
-    // ];
-    // for (let epoch of items) {
-    //     await checkPosRewardRecord(epoch);
-    // }
+async function checkSpecifyEpochs() {
+    let items = [
+        705  ,  
+        2670 ,  
+        2811 ,  
+        3356 ,  
+        6496 ,  
+        18685,  
+        30798,  
+        31111,  
+        37890
+    ];
+    for (let epoch of items) {
+        await checkPosRewardRecord(epoch);
+    }
 }
 
 async function checkPosRewardRecord(epoch) {
@@ -72,6 +81,8 @@ async function checkPosRewardRecord(epoch) {
         // console.log('addTransfers:', addTransfers);
         // console.log('subTransfers:', subTransfers);
 
+        let powRewards = await getEpochPowRewardInfo(powEpochNumber);
+
         let recordValid = true;
         for(let rewardRecord of reward.accountRewards) {
             let powAddress = format.address(rewardRecord.powAddress);
@@ -81,11 +92,13 @@ async function checkPosRewardRecord(epoch) {
 
             let internalAdd = addTransfers[powAddress] || 0n;
             let internalSub = subTransfers[powAddress] || 0n;
+            let powReward = powRewards[powAddress] || 0n;
 
-            if (balanceBefore + internalAdd - internalSub + rewardRecord.reward !== balanceAfter) {
+            if (balanceBefore + internalAdd - internalSub + powReward + rewardRecord.reward !== balanceAfter) {
                 console.error(`balance before: ${balanceBefore}, balance after: ${balanceAfter}`);
                 console.error(`internal transfers add: ${internalAdd}, sub: ${internalSub}`);
-                console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - (balanceBefore + internalAdd - internalSub)}`);
+                console.error(`pow reward: ${powReward}`);
+                console.error(`epoch ${epoch} reward record for account ${rewardRecord.powAddress} is invalid! expected reward: ${rewardRecord.reward}, actual reward: ${balanceAfter - (balanceBefore + internalAdd - internalSub + powReward)}`);
                 recordValid = false;
             }
         }
@@ -212,6 +225,16 @@ async function getEpochInternalTransfers(epochNumber) {
         addTransfers,
         subTransfers,
     };
+}
+
+async function getEpochPowRewardInfo(epochNumber) {
+    let recordEpoch = epochNumber - 12;
+    let rewards = await conflux.cfx.getBlockRewardInfo(recordEpoch);
+    let res = {};
+    for (let reward of rewards) {
+        res[format.address(reward.author)] = reward.totalReward;
+    }
+    return res;
 }
 
 main().catch((err) => {
